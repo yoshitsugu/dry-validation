@@ -94,7 +94,6 @@ module Dry
           from_block = block ? Key[name, registry: registry].instance_eval(&block) : nil
 
           right = [from_predicates, from_block].compact.reduce(:and) || key(:filled?)
-
           rule = left.or(right)
 
           add_rule(__send__(type, rule))
