@@ -1,25 +1,25 @@
-require 'dry/validation/constants'
+require 'dry/core/constants'
 
 module Dry
   module Validation
     class Result
-      include Dry::Equalizer(:output, :messages)
+      include Core::Constants
+      include Dry::Equalizer(:output, :errors)
       include Enumerable
 
       attr_reader :output
-      attr_reader :errors
-      attr_reader :error_compiler
-      attr_reader :hint_compiler
+      attr_reader :results
+      attr_reader :message_compiler
+      attr_reader :path
 
       alias_method :to_hash, :output
       alias_method :to_h, :output # for MRI 2.0, remove it when drop support
 
-      def initialize(output, errors, error_compiler, hint_compiler)
+      def initialize(output, results, message_compiler, path)
         @output = output
-        @errors = errors
-        @error_compiler = error_compiler
-        @hint_compiler = hint_compiler
-        @messages = EMPTY_HASH if success?
+        @results = results
+        @message_compiler = message_compiler
+        @path = path
       end
 
       def each(&block)
@@ -31,7 +31,7 @@ module Dry
       end
 
       def success?
-        errors.empty?
+        results.empty?
       end
 
       def failure?
@@ -42,20 +42,42 @@ module Dry
         message_set(options).dump
       end
 
+      def errors(options = EMPTY_HASH)
+        message_set(options.merge(hints: false)).dump
+      end
+
+      def hints(options = EMPTY_HASH)
+        message_set(options.merge(failures: false)).dump
+      end
+
       def message_set(options = EMPTY_HASH)
-        error_compiler
-          .with(options).(error_ast)
-          .with_hints!(hint_compiler.with(options).())
+        message_compiler.with(options).(result_ast)
       end
 
       def to_ast
-        [:set, error_ast]
+        if name
+          [type, [name, [:set, result_ast]]]
+        else
+          ast
+        end
+      end
+
+      def ast(*)
+        [:set, result_ast]
+      end
+
+      def name
+        Array(path).last
       end
 
       private
 
-      def error_ast
-        @error_ast ||= errors.map { |error| error.to_ast }
+      def type
+        success? ? :success : :failure
+      end
+
+      def result_ast
+        @result_ast ||= results.map(&:to_ast)
       end
     end
   end

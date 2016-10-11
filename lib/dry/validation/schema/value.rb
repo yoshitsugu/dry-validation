@@ -76,26 +76,24 @@ module Dry
 
         def when(*predicates, &block)
           left = infer_predicates(predicates, Check[path, type: type, registry: registry])
+          right = Value.new(type: type, registry: registry).instance_eval(&block)
 
-          right = Value.new(type: type, registry: registry)
-          right.instance_eval(&block)
-
-          add_check(left.then(create_rule(right.to_ast)))
+          add_check(left.then(right.to_rule))
 
           self
         end
 
         def rule(id = nil, **options, &block)
           if id
-            val = Value[id, registry: registry]
+            val = Value[id, registry: registry, schema_class: schema_class]
             res = val.instance_exec(&block)
           else
             id, deps = options.to_a.first
-            val = Value[id, registry: registry]
-            res = val.instance_exec(*deps.map { |name| val.value(name) }, &block)
+            val = Value[id, registry: registry, schema_class: schema_class]
+            res = val.instance_exec(*deps.map { |path| val.value(id, path: path) }, &block)
           end
 
-          add_check(val.with(rules: [res.with(deps: deps || [])]))
+          add_check(val.with(rules: [res.with(name: id, deps: deps || [])]))
         end
 
         def confirmation
@@ -103,15 +101,24 @@ module Dry
 
           parent.optional(conf).maybe
 
-          rule(conf => [conf, name]) { |left, right| left.eql?(right) }
+          rule(conf => [conf, name]) do |left, right|
+            left.eql?(right)
+          end
         end
 
-        def value(name)
-          check(name, registry: registry, rules: rules)
+        def value(path, opts = {})
+          check(name || path, { registry: registry, rules: rules, path: path }.merge(opts))
         end
 
         def check(name, options = {})
           Check[name, options.merge(type: type)]
+        end
+
+        def validate(**opts, &block)
+          id, *deps = opts.to_a.flatten
+          name = deps.size > 1 ? id : deps.first
+          rule = create_rule([:check, [deps, [:custom, [id, block]]]], name).with(deps: deps)
+          add_check(rule)
         end
 
         def configure(&block)
@@ -141,21 +148,15 @@ module Dry
         end
 
         def key?(name)
-          create_rule([:val, registry[:key?].curry(name).to_ast])
-        end
-
-        def predicate(name, *args)
-          registry.ensure_valid_predicate(name, args, schema_class)
-          registry[name].curry(*args)
+          create_rule(predicate(:key?, name))
         end
 
         def node(input, *args)
           if input.is_a?(::Symbol)
-            [type, [name, predicate(input, *args).to_ast]]
+            registry.ensure_valid_predicate(input, args, schema_class)
+            [type, [name, predicate(input, args)]]
           elsif input.respond_to?(:rule)
             [type, [name, [:type, input]]]
-          elsif input.is_a?(::Class) && input < ::Dry::Types::Struct
-            [type, [name, [:schema, Schema.create_class(self, input)]]]
           elsif input.is_a?(Schema)
             [type, [name, schema(input).to_ast]]
           else
@@ -164,7 +165,7 @@ module Dry
         end
 
         def dyn_arg?(name)
-          schema_class.instance_methods.include?(name)
+          !name.to_s.end_with?('?') && schema_class.instance_methods.include?(name)
         end
 
         def respond_to?(name)
@@ -190,7 +191,7 @@ module Dry
         def method_missing(meth, *args, &block)
           return schema_class.instance_method(meth) if dyn_arg?(meth)
 
-          val_rule = create_rule([:val, predicate(meth, *args).to_ast])
+          val_rule = create_rule(predicate(meth, args))
 
           if block
             val = new.instance_eval(&block)

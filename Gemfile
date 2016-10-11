@@ -5,6 +5,8 @@ gemspec
 group :test do
   gem 'i18n', require: false
   gem 'codeclimate-test-reporter', platform: :rbx
+  gem 'dry-monads', require: false
+  gem 'dry-struct', github: 'dry-rb/dry-struct', branch: 'master', require: false
 end
 
 group :tools do

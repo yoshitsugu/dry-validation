@@ -24,6 +24,11 @@ module Dry
         send(:"visit_#{node[0]}", node[1], *args)
       end
 
+      def visit_rule(node, *args)
+        _, rule = node
+        visit(rule, *args)
+      end
+
       def visit_type(type, *args)
         if type.is_a?(Types::Constructor)
           [:constructor, [type.primitive, type.fn]]
@@ -63,9 +68,20 @@ module Dry
         end
       end
 
-      def visit_implication(node)
-        key, types = node
-        [:key, [visit(key), visit(types, false)]]
+      def visit_implication(node, *args)
+        left, right = node
+
+        key = visit(left)
+
+        if key.is_a?(Symbol)
+          [:key, [key, visit(right, false)]]
+        else
+          [:sum, [key, visit(right, false)]]
+        end
+      end
+
+      def visit_not(node, *args)
+        visit(node, *args)
       end
 
       def visit_key(node, *args)

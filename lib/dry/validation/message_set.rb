@@ -1,20 +1,27 @@
-require 'dry/validation/constants'
+require 'dry/core/constants'
 
 module Dry
   module Validation
     class MessageSet
+      include Core::Constants
       include Enumerable
 
-      attr_reader :messages, :hints, :paths, :placeholders
+      HINT_EXCLUSION = %i(key? filled? none? bool? str? int? float? decimal? date? date_time? time? hash? array?).freeze
 
-      def self.[](messages)
-        new(messages.flatten)
+      attr_reader :messages, :failures, :hints, :paths, :placeholders, :options
+
+      def self.[](messages, options = EMPTY_HASH)
+        new(messages.flatten, options)
       end
 
-      def initialize(messages)
+      def initialize(messages, options = EMPTY_HASH)
         @messages = messages
-        @hints = {}
-        @paths = map(&:path).uniq
+        @hints = messages.select(&:hint?)
+        @failures = messages - hints
+        @paths = failures.map(&:path).uniq
+        @options = options
+
+        initialize_hints!
         initialize_placeholders!
       end
 
@@ -22,12 +29,16 @@ module Dry
         root? ? to_a : to_h
       end
 
+      def failures?
+        options[:failures].equal?(true)
+      end
+
       def empty?
         messages.empty?
       end
 
       def root?
-        !empty? && messages.all?(&:root?)
+        !empty? && failures.all?(&:root?)
       end
 
       def each(&block)
@@ -35,32 +46,11 @@ module Dry
         messages.each(&block)
       end
 
-      def with_hints!(hints)
-        @hints.update(hints.group_by(&:index_path))
-        self
-      end
-
       def to_h
         if root?
-          { nil => map(&:to_s) }
+          { nil => failures.map(&:to_s) }
         else
-          group_by(&:path).reduce(placeholders) do |hash, (path, msgs)|
-            node = path.reduce(hash) { |a, e| a[e] }
-
-            msgs.each do |msg|
-              node << msg
-              msg_hints = hints[msg.index_path]
-
-              if msg_hints
-                node.concat(msg_hints)
-                node.uniq!(&:signature)
-              end
-            end
-
-            node.map!(&:to_s)
-
-            hash
-          end
+          failures? ? messages_map : hints_map
         end
       end
       alias_method :to_hash, :to_h
@@ -70,6 +60,45 @@ module Dry
       end
 
       private
+
+      def messages_map
+        failures.group_by(&:path).reduce(placeholders) do |hash, (path, msgs)|
+          node = path.reduce(hash) { |a, e| a[e] }
+
+          msgs.each do |msg|
+            node << msg
+
+            msg_hints = hint_groups[msg.path]
+            node.concat(msg_hints) if msg_hints
+          end
+
+          node.map!(&:to_s)
+
+          hash
+        end
+      end
+
+      def hints_map
+        hints.group_by(&:path).reduce(placeholders) do |hash, (path, msgs)|
+          node = path.reduce(hash) { |a, e| a[e] }
+
+          msgs.each do |msg|
+            node << msg
+          end
+
+          node.map!(&:to_s)
+
+          hash
+        end
+      end
+
+      def hint_groups
+        @hint_groups ||= hints.group_by(&:path)
+      end
+
+      def initialize_hints!
+        hints.reject! { |hint| HINT_EXCLUSION.include?(hint.predicate) }
+      end
 
       def initialize_placeholders!
         @placeholders = paths.reduce({}) do |hash, path|

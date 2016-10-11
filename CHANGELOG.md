@@ -1,3 +1,60 @@
+# v0.10.3 2016-09-27
+
+### Fixed
+
+* Custom predicates work correctly with `each` macro (solnic)
+
+[Compare v0.10.2...v0.10.3](https://github.com/dryrb/dry-validation/compare/v0.10.2...v0.10.3)
+
+# v0.10.2 2016-09-23
+
+### Fixed
+
+* Constrained types + hints work again (solnic)
+
+[Compare v0.10.1...v0.10.2](https://github.com/dryrb/dry-validation/compare/v0.10.1...v0.10.2)
+
+# v0.10.1 2016-09-22
+
+### Fixed
+
+* Remove obsolete require of `dry/struct` which is now an optional extension (flash-gordon)
+
+[Compare v0.10.0...v0.10.1](https://github.com/dryrb/dry-validation/compare/v0.10.0...v0.10.1)
+
+# v0.10.0 2016-09-21
+
+### Added
+
+* Support for `validate` DSL which accepts an arbitratry validation block that gets executed in the context of a schema object and is treated as a custom predicate (solnic)
+* Support for `or` error messages ie "must be a string or must be an integer" (solnic)
+* Support for retrieving error messages exclusively via `schema.(input).errors` (solnic)
+* Support for retrieving hint messages exclusively via `schema.(input).hints` (solnic)
+* Support for opt-in extensions loaded via `Dry::Validation.load_extensions(:my_ext)` (flash-gordon)
+* Add `:monads` extension which transforms a result instance to `Either` monad, `schema.(input).to_either` (flash-gordon)
+* Add `dry-struct` integration via an extension activated by `Dry::Validation.load_extension(:struct)` (flash-gordon)
+
+### Fixed
+
+* Input rules (defined via `input` macro) are now lazy-initialized which makes it work with predicates defined on the schema object (solnic)
+* Hints are properly generated based on argument type in cases like `size?`, where the message should be different for strings (uses "length") or other types (uses "size") (solnic)
+* Defining nested keys without `schema` blocks results in `ArgumentError` (solnic)
+
+### Changed
+
+* [BREAKING] `when` macro no longer supports multiple disconnected rules in its block, whatever the block returns will be used for the implication (solnic)
+* [BREAKING] `rule(some_name: %i(some keys))` will *always* use `:some_name` as the key for failure messages (solnic)
+
+### Internal
+
+* ~2 x performance boost (solnic)
+* Rule AST was updated to latest dry-logic (solnic)
+* `MessageCompiler` was drastically simplified based on the new result AST from dry-logic (solnic)
+* `HintCompiler` is gone as hints are now part of the result AST (solnic)
+* `maybe` macro creates an implication instead of a disjunction (`not(none?).then(*your-predicates)`) (solnic)
+
+[Compare v0.9.5...v0.10.0](https://github.com/dryrb/dry-validation/compare/v0.9.5...v0.10.0)
+
 # v0.9.5 2016-08-16
 
 ### Fixed

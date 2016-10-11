@@ -48,7 +48,9 @@ module Dry
         target = dsl.schema_class
 
         if config.input
-          config.input_rule = dsl.infer_predicates(Array(target.config.input))
+          config.input_rule = -> predicates {
+            Schema::Value.new(registry: predicates).infer_predicates(Array(target.config.input)).to_ast
+          }
         end
 
         rules = target.config.rules + (options.fetch(:rules, []) + dsl.rules)
@@ -85,10 +87,6 @@ module Dry
         klass =
           if other.is_a?(self)
             Class.new(other.class)
-          elsif other.is_a?(Class) && other < Types::Struct
-            Validation.Schema(parent: target, build: false) do
-              other.schema.each { |attr, type| required(attr).filled(type) }
-            end
           elsif other.respond_to?(:schema) && other.schema.is_a?(self)
             Class.new(other.schema.class)
           else
@@ -166,14 +164,17 @@ module Dry
         @hint_compiler ||= HintCompiler.new(messages, rules: rule_ast)
       end
 
+      def self.message_compiler
+        @message_compiler ||= MessageCompiler.new(messages)
+      end
+
       def self.rule_ast
         @rule_ast ||= config.rules.map(&:to_ast)
       end
 
       def self.default_options
         @default_options ||= { predicate_registry: registry,
-          error_compiler: error_compiler,
-          hint_compiler: hint_compiler,
+          message_compiler: message_compiler,
           input_processor: input_processor,
           checks: config.checks }
       end

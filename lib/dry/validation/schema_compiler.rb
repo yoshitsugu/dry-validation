@@ -14,6 +14,10 @@ module Dry
         rule.(input) if deps_valid?(results)
       end
 
+      def with(options)
+        self.class.new(rule.with(options), deps)
+      end
+
       private
 
       def deps_valid?(results)
@@ -21,7 +25,7 @@ module Dry
           result = nil
           Array(path).each do |name|
             curr = results[name]
-            result = curr.success? if curr.respond_to?(:success)
+            result = curr.success? if curr
           end
           result
         end
@@ -37,8 +41,18 @@ module Dry
         @schema = predicates.schema
       end
 
+      def visit_rule(node)
+        id, other = node
+        visit(other).with(id: id)
+      end
+
       def visit_predicate(node)
-        super.evaluate_args!(schema)
+        super.eval_args(schema)
+      end
+
+      def visit_custom(node)
+        id, predicate = node
+        Logic::Rule.new(predicate).with(id: id).bind(schema)
       end
 
       def visit_schema(klass)
